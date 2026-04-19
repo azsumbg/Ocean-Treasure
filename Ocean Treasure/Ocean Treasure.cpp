@@ -191,15 +191,31 @@ void LogErr(const wchar_t* what)
 int IntroFrame()
 {
 	static int frame{ 0 };
-	static int frame_delay{ 9 };
+	static int frame_delay{ 7 };
 
 	--frame_delay;
 
 	if (frame_delay <= 0)
 	{
-		frame_delay = 9;
+		frame_delay = 7;
 		++frame;
 		if (frame > 6)frame = 0;
+	}
+
+	return frame;
+}
+int OceanFrame()
+{
+	static int frame{ 0 };
+	static int frame_delay{ 10 };
+
+	--frame_delay;
+
+	if (frame_delay <= 0)
+	{
+		frame_delay = 10;
+		++frame;
+		if (frame > 4)frame = 0;
 	}
 
 	return frame;
@@ -306,9 +322,9 @@ void InitGame()
 
 	if (Field)delete Field;
 	Field = new dll::FIELD();
-	
+
 	FreeMem(&Hero);
-	Hero = dll::HERO::create(RandIt(50.0f, scr_width - 100.0f), ground - 100.0f);
+	Hero = dll::HERO::create(RandIt(50.0f, scr_width - 100.0f), ground - 250.0f);
 
 
 }
@@ -979,14 +995,17 @@ void CreateResources()
 		if (result == FILE_EXIST)ErrExit(eD2D);
 	}
 
-	Draw->BeginDraw();
-	Draw->DrawBitmap(bmpIntro[IntroFrame()], D2D1::RectF(0, 0, scr_width, scr_height));
-	if (bigFormat && txtBrush)
-		Draw->DrawTextW(L"PIRATE TREASURE !", 18, bigFormat, D2D1::RectF(300.0f, scr_height / 2.0f - 50.0f, scr_width,
-			scr_height), txtBrush);
-	Draw->EndDraw();
-	PlaySound(L".\\res\\snd\\wave.wav", NULL, SND_SYNC);
+	PlaySound(L".\\res\\snd\\wave.wav", NULL, SND_ASYNC);
 
+	for (int i = 0; i < 180; ++i)
+	{
+		Draw->BeginDraw();
+		Draw->DrawBitmap(bmpIntro[IntroFrame()], D2D1::RectF(0, 0, scr_width, scr_height));
+		if (bigFormat && txtBrush)
+			Draw->DrawTextW(L"PIRATE TREASURE !", 18, bigFormat, D2D1::RectF(100.0f, scr_height / 2.0f - 50.0f, scr_width,
+				scr_height), txtBrush);
+		Draw->EndDraw();
+	}
 
 	Draw->BeginDraw();
 	Draw->DrawBitmap(bmpLogo, D2D1::RectF(0, 0, scr_width, scr_height));
@@ -1009,8 +1028,116 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 
 
+	while (bMsg.message != WM_QUIT)
+	{
+		if ((bRet = PeekMessage(&bMsg, nullptr, NULL, NULL, PM_REMOVE)) != 0)
+		{
+			if (bRet == -1)ErrExit(eMsg);
+			TranslateMessage(&bMsg);
+			DispatchMessage(&bMsg);
+		}
+
+		if (pause)
+		{
+			if (show_help)continue;
+			Draw->BeginDraw();
+			Draw->DrawBitmap(bmpIntro[IntroFrame()], D2D1::RectF(0, 0, scr_width, scr_height));
+			if (txtBrush && bigFormat)
+				Draw->DrawTextW(L"ПАУЗА", 6, bigFormat, D2D1::RectF(scr_width / 2.0f - 100.0f, scr_height / 2.0f - 50.0f,
+					scr_width, scr_height), txtBrush);
+			Draw->EndDraw();
+			continue;
+		}
+
+		///////////////////////////////////////////////////////
 
 
+
+
+
+
+
+
+
+		// DRAW THINGS *************************************
+		
+		Draw->BeginDraw();
+		
+		for (int rows = 0; rows < 3; ++rows)
+		{
+			for (int cols = 0; cols < 3; ++cols)
+			{
+				if (Field->in_view_port(Field->ocean_tiles[rows][cols]))
+					Draw->DrawBitmap(bmpOcean[OceanFrame()], D2D1::RectF(Field->ocean_tiles[rows][cols].left,
+						Field->ocean_tiles[rows][cols].up, Field->ocean_tiles[rows][cols].right,
+						Field->ocean_tiles[rows][cols].down));
+			}
+		}
+		
+		if (Hero)
+		{
+			int aframe = Hero->get_frame();
+
+			switch (Hero->dir)
+			{
+			case dirs::down:
+				Draw->DrawBitmap(bmpHeroDL[aframe], Resizer(bmpHeroDL[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::down_left:
+				Draw->DrawBitmap(bmpHeroDL[aframe], Resizer(bmpHeroDL[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::down_right:
+				Draw->DrawBitmap(bmpHeroDR[aframe], Resizer(bmpHeroDR[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::up:
+				Draw->DrawBitmap(bmpHeroUR[aframe], Resizer(bmpHeroUR[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::up_left:
+				Draw->DrawBitmap(bmpHeroUL[aframe], Resizer(bmpHeroUL[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::up_right:
+				Draw->DrawBitmap(bmpHeroUR[aframe], Resizer(bmpHeroUR[aframe], Hero->start.x, Hero->start.y));
+				break;
+
+			case dirs::stop:
+				Draw->DrawBitmap(bmpHeroUR[aframe], Resizer(bmpHeroUR[aframe], Hero->start.x, Hero->start.y));
+				break;
+			}
+		}
+		
+		
+		
+		/////////////////////////////////////////////////////////////////////////
+		
+		if (statBrush && inactBrush && txtBrush && hgltBrush && b1BckgBrush && b2BckgBrush && b3BckgBrush && nrmFormat)
+		{
+			Draw->FillRectangle(D2D1::RectF(0, 0, scr_width, 50.0f), statBrush);
+			Draw->FillRoundedRectangle(D2D1::RoundedRect(b1Rect, 20.0f, 10.0f), b1BckgBrush);
+			Draw->FillRoundedRectangle(D2D1::RoundedRect(b2Rect, 20.0f, 10.0f), b2BckgBrush);
+			Draw->FillRoundedRectangle(D2D1::RoundedRect(b3Rect, 20.0f, 10.0f), b3BckgBrush);
+
+			if (name_set)Draw->DrawTextW(L"ИМЕ НА КАПИТАН", 15, nrmFormat, b1TxtRect, inactBrush);
+			else
+			{
+				if (b1Hglt)Draw->DrawTextW(L"ИМЕ НА КАПИТАН", 15, nrmFormat, b1TxtRect, hgltBrush);
+				else Draw->DrawTextW(L"ИМЕ НА КАПИТАН", 15, nrmFormat, b1TxtRect, txtBrush);
+			}
+			if (b2Hglt)Draw->DrawTextW(L"ЗВУЦИ ON / OFF", 15, nrmFormat, b2TxtRect, hgltBrush);
+			else Draw->DrawTextW(L"ЗВУЦИ ON / OFF", 15, nrmFormat, b2TxtRect, txtBrush);
+			if (b3Hglt)Draw->DrawTextW(L"ПОМОЩ ЗА ИГРАТА", 16, nrmFormat, b3TxtRect, hgltBrush);
+			else Draw->DrawTextW(L"ПОМОЩ ЗА ИГРАТА", 16, nrmFormat, b3TxtRect, txtBrush);
+		}
+		
+		//////////////////////////////////////////////
+		
+		Draw->EndDraw();
+
+	}
 
 	std::remove(tmp_file);
 	ClearResources();
