@@ -55,12 +55,12 @@ MSG bMsg{};
 BOOL bRet{ 0 };
 
 D2D1_RECT_F b1Rect(50.0f, 10.0f, scr_width / 3.0f - 50.0f, 40.0f);
-D2D1_RECT_F b2Rect(scr_width / 3.0f, 10.0f, scr_width * 2.0f / 3.0f - 50.0f, 40.0f);
-D2D1_RECT_F b3Rect(scr_width * 2.0f / 3.0f, 10.0f, scr_width - 50.0f, 40.0f);
+D2D1_RECT_F b2Rect(scr_width / 3.0f + 50.0f, 10.0f, scr_width * 2.0f / 3.0f - 50.0f, 40.0f);
+D2D1_RECT_F b3Rect(scr_width * 2.0f / 3.0f + 50.0f, 10.0f, scr_width - 50.0f, 40.0f);
 
 D2D1_RECT_F b1TxtRect(80.0f, 15.0f, scr_width / 3.0f - 50.0f, 40.0f);
-D2D1_RECT_F b2TxtRect(scr_width / 3.0f + 30.0f, 15.0f, scr_width * 2.0f / 3.0f - 50.0f, 40.0f);
-D2D1_RECT_F b3TxtRect(scr_width * 2.0f / 3.0f + 20.0f, 15.0f, scr_width - 50.0f, 40.0f);
+D2D1_RECT_F b2TxtRect(scr_width / 3.0f + 100.0f, 15.0f, scr_width * 2.0f / 3.0f - 50.0f, 40.0f);
+D2D1_RECT_F b3TxtRect(scr_width * 2.0f / 3.0f + 90.0f, 15.0f, scr_width - 50.0f, 40.0f);
 
 int speed = 1;
 int score = 0;
@@ -161,6 +161,7 @@ dll::FIELD* Field{ nullptr };
 
 dll::HERO* Hero{ nullptr };
 
+std::vector<dll::OBSTACLE*>vObstacles;
 
 
 std::vector<EXPLOSION>vExplosions;
@@ -191,13 +192,13 @@ void LogErr(const wchar_t* what)
 int IntroFrame()
 {
 	static int frame{ 0 };
-	static int frame_delay{ 7 };
+	static int frame_delay{ 5 };
 
 	--frame_delay;
 
 	if (frame_delay <= 0)
 	{
-		frame_delay = 7;
+		frame_delay = 5;
 		++frame;
 		if (frame > 6)frame = 0;
 	}
@@ -324,8 +325,13 @@ void InitGame()
 	Field = new dll::FIELD();
 
 	FreeMem(&Hero);
-	Hero = dll::HERO::create(RandIt(50.0f, scr_width - 100.0f), ground - 250.0f);
+	Hero = dll::HERO::create(RandIt(80.0f, scr_width - 300.0f), scr_height / 2.0f - 50.0f);
 
+	if (!vObstacles.empty())
+		for (int i = 0; i < vObstacles.size(); ++i)FreeMem(&vObstacles[i]);
+	vObstacles.clear();
+	
+	vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), -scr_height + 50.0f));
 
 }
 
@@ -528,8 +534,17 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 		}
 		break;
 
+	case WM_RBUTTONDOWN:
+		if (Hero)
+		{
+			dll::BAG<FRECT>ObstBag(vObstacles.size());
 
-
+			if (!vObstacles.empty())
+				for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
+			
+			Hero->move(LOWORD(lParam)* scale_x, HIWORD(lParam)* scale_y, (float)(speed), ObstBag);
+		}
+		break;
 
 
 
@@ -1051,6 +1066,44 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		///////////////////////////////////////////////////////
 
+		// HERO ACTION ****************************
+		
+		if (Hero)
+		{
+			
+			if (Hero->end.y >= ground - 100.0f)nature_dir = dirs::up;
+			else if (Hero->start.y <= sky + 100.0f)nature_dir = dirs::down;
+			else if (Hero->start.x <= 100.0f)nature_dir = dirs::right;
+			else if (Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::left;
+			else if (Hero->end.y >= ground - 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::up_right;
+			else if (Hero->end.y >= ground - 100.0f && Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::up_left;
+			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_right;
+			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_left;
+		}
+
+		if (Hero)
+		{
+			if (Hero->dir != dirs::stop)
+			{
+				dll::BAG<FRECT>ObstBag(vObstacles.size());
+
+				if (!vObstacles.empty())
+					for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
+
+				Hero->move(Hero->get_target_x(), Hero->get_target_y(), (float)(speed), ObstBag);
+			}
+		}
+
+		
+		if (Field && nature_dir != dirs::stop)Field->move_ocean(nature_dir, (float)(speed));
+			
+		
+
+
+		///////////////////////////////////////////
+
+
+
 
 
 
@@ -1063,18 +1116,21 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		
 		Draw->BeginDraw();
 		
-		for (int rows = 0; rows < 3; ++rows)
+		if (Field)
 		{
-			for (int cols = 0; cols < 3; ++cols)
+			for (int rows = 0; rows < 3; ++rows)
 			{
-				if (Field->in_view_port(Field->ocean_tiles[rows][cols]))
-					Draw->DrawBitmap(bmpOcean[OceanFrame()], D2D1::RectF(Field->ocean_tiles[rows][cols].left,
-						Field->ocean_tiles[rows][cols].up, Field->ocean_tiles[rows][cols].right,
-						Field->ocean_tiles[rows][cols].down));
+				for (int cols = 0; cols < 3; ++cols)
+				{
+					if (Field->in_view_port(Field->ocean_tiles[rows][cols]))
+						Draw->DrawBitmap(bmpOcean[OceanFrame()], D2D1::RectF(Field->ocean_tiles[rows][cols].left,
+							Field->ocean_tiles[rows][cols].up, Field->ocean_tiles[rows][cols].right,
+							Field->ocean_tiles[rows][cols].down));
+				}
 			}
 		}
-		
-		if (Hero)
+
+		if (Hero && Field)
 		{
 			int aframe = Hero->get_frame();
 
