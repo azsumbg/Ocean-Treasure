@@ -330,8 +330,12 @@ void InitGame()
 	if (!vObstacles.empty())
 		for (int i = 0; i < vObstacles.size(); ++i)FreeMem(&vObstacles[i]);
 	vObstacles.clear();
-	
-	vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), -scr_height + 50.0f));
+	if (RandIt(0, 2) == 1)
+		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), -scr_height +
+			10.0f));
+	else
+		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), scr_height *2.0f 
+			-100.0f));
 
 }
 
@@ -1067,18 +1071,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 		///////////////////////////////////////////////////////
 
 		// HERO ACTION ****************************
-		
+
+		nature_dir = dirs::stop;
+
 		if (Hero)
 		{
-			
-			if (Hero->end.y >= ground - 100.0f)nature_dir = dirs::up;
-			else if (Hero->start.y <= sky + 100.0f)nature_dir = dirs::down;
-			else if (Hero->start.x <= 100.0f)nature_dir = dirs::right;
-			else if (Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::left;
-			else if (Hero->end.y >= ground - 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::up_right;
+
+			if (Hero->end.y >= ground - 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::up_right;
 			else if (Hero->end.y >= ground - 100.0f && Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::up_left;
 			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_right;
 			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_left;
+			else if (Hero->end.y >= ground - 100.0f)nature_dir = dirs::up;
+			else if (Hero->start.y <= sky + 100.0f)nature_dir = dirs::down;
+			else if (Hero->start.x <= 100.0f)nature_dir = dirs::right;
+			else if (Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::left;
 		}
 
 		if (Hero)
@@ -1091,13 +1097,22 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 					for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
 
 				Hero->move(Hero->get_target_x(), Hero->get_target_y(), (float)(speed), ObstBag);
+				
+				if (nature_dir == dirs::right || nature_dir == dirs::down_right)
+					Hero->dir = dirs::up_left;
+				else if (nature_dir == dirs::up_right)Hero->dir = dirs::down_left;
+				
 			}
 		}
-
 		
-		if (Field && nature_dir != dirs::stop)Field->move_ocean(nature_dir, (float)(speed));
+		bool ocean_moving = false;
+		if (Field && nature_dir != dirs::stop)
+			ocean_moving = Field->move_ocean(nature_dir, (float)(speed));
 			
-		
+		if (!vObstacles.empty() && nature_dir != dirs::stop && ocean_moving)
+		{
+			for (int i = 0; i < vObstacles.size(); ++i)vObstacles[i]->move(nature_dir, (float)(speed));
+		}
 
 
 		///////////////////////////////////////////
@@ -1166,7 +1181,41 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 			}
 		}
 		
-		
+		if (!vObstacles.empty())
+		{
+			for (int i = 0; i < vObstacles.size(); ++i)
+			{
+				int aframe = vObstacles[i]->get_frame();
+
+				switch (vObstacles[i]->type)
+				{
+				case obstacles::island:
+					Draw->DrawBitmap(bmpIsland, D2D1::RectF(vObstacles[i]->my_rect.left, vObstacles[i]->my_rect.up,
+						vObstacles[i]->my_rect.right, vObstacles[i]->my_rect.down));
+					break;
+
+				case obstacles::swirl:
+					Draw->DrawBitmap(bmpSwirl[aframe], Resizer(bmpSwirl[aframe], vObstacles[i]->my_rect.left,
+						vObstacles[i]->my_rect.up));
+					break;
+
+				case obstacles::big_rock:
+					Draw->DrawBitmap(bmpRock1, D2D1::RectF(vObstacles[i]->my_rect.left, vObstacles[i]->my_rect.up,
+						vObstacles[i]->my_rect.right, vObstacles[i]->my_rect.down));
+					break;
+
+				case obstacles::mid_rock:
+					Draw->DrawBitmap(bmpRock2, D2D1::RectF(vObstacles[i]->my_rect.left, vObstacles[i]->my_rect.up,
+						vObstacles[i]->my_rect.right, vObstacles[i]->my_rect.down));
+					break;
+
+				case obstacles::small_rock:
+					Draw->DrawBitmap(bmpRock3, D2D1::RectF(vObstacles[i]->my_rect.left, vObstacles[i]->my_rect.up,
+						vObstacles[i]->my_rect.right, vObstacles[i]->my_rect.down));
+					break;
+				}
+			}
+		}
 		
 		/////////////////////////////////////////////////////////////////////////
 		
