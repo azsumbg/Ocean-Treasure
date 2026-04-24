@@ -160,6 +160,7 @@ ID2D1Bitmap* bmpExplosion[24]{ nullptr };
 dll::FIELD* Field{ nullptr };
 
 dll::HERO* Hero{ nullptr };
+bool stop_nature = false;
 
 std::vector<dll::OBSTACLE*>vObstacles;
 
@@ -324,19 +325,97 @@ void InitGame()
 	if (Field)delete Field;
 	Field = new dll::FIELD();
 
-	FreeMem(&Hero);
-	Hero = dll::HERO::create(RandIt(80.0f, scr_width - 300.0f), scr_height / 2.0f - 50.0f);
+	stop_nature = false;
+	nature_dir = dirs::stop;
 
 	if (!vObstacles.empty())
 		for (int i = 0; i < vObstacles.size(); ++i)FreeMem(&vObstacles[i]);
 	vObstacles.clear();
-	if (RandIt(0, 2) == 1)
-		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), -scr_height +
-			10.0f));
-	else
-		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width, 2 * scr_width - 200.0f), scr_height *2.0f 
-			-100.0f));
 
+	if (RandIt(0, 2) == 1)
+		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width + 50.0f, 
+			2 * scr_width - 200.0f), -scr_height + 10.0f));
+	else
+		vObstacles.push_back(dll::OBSTACLE::create(obstacles::island, RandIt(-scr_width + 50.0f, 2 * scr_width - 200.0f), 
+			scr_height *2.0f - 100.0f));
+
+	for (int count = 0; count < 5; ++count)
+	{
+		bool ok = false;
+
+		while (!ok)
+		{
+			ok = true;
+
+			int ttype = RandIt(0, 3);
+			float start_x = RandIt(-scr_width + 10.0f, 2.0f * scr_width - 100.0f);
+			float start_y = RandIt(-scr_height + 10.0f, 2.0f * scr_height - 100.0f);
+
+			dll::OBSTACLE* dummy{ nullptr };
+
+			switch (ttype)
+			{
+			case 0:
+				dummy = dll::OBSTACLE::create(obstacles::small_rock, start_x, start_y);
+				break;
+
+			case 1:
+				dummy = dll::OBSTACLE::create(obstacles::mid_rock, start_x, start_y);
+				break;
+
+			case 2:
+				dummy = dll::OBSTACLE::create(obstacles::big_rock, start_x, start_y);
+				break;
+
+			case 3:
+				dummy = dll::OBSTACLE::create(obstacles::swirl, start_x, start_y);
+				break;
+			}
+
+			if (!vObstacles.empty() && dummy)
+			{
+				for (int i = 0; i < vObstacles.size(); ++i)
+				{
+					if (dll::Intersect(dummy->my_rect, vObstacles[i]->my_rect))
+					{
+						ok = false;
+						break;
+					}
+				}
+			}
+
+			if (ok)vObstacles.push_back(dummy);
+			else if (!FreeMem(&dummy))LogErr(L"Error in initialization of vObstacles in Init()");
+		}
+	}
+
+	FreeMem(&Hero);
+	if (!vObstacles.empty())
+	{
+		bool ok = false;
+
+		while (!ok)
+		{
+			ok = true;
+
+			float start_x = RandIt(80.0f, scr_width - 300.0f);
+			float start_y = scr_height / 2.0f - 50.0f;
+
+			dll::HERO* dummy = dll::HERO::create(start_x, start_y);
+
+			for (int i = 0; i < vObstacles.size(); ++i)
+			{
+				if (dll::Intersect(FRECT{ dummy->start.x,dummy->start.y,dummy->end.x,dummy->end.y }, vObstacles[i]->my_rect))
+				{
+					ok = false;
+					break;
+				}
+			}
+			
+			if (ok)Hero = dummy;
+			else if (!FreeMem(&dummy))LogErr(L"Error in initialization of Hero in Init()");
+		}
+	}
 }
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lParam)
@@ -541,12 +620,24 @@ LRESULT CALLBACK WinProc(HWND hwnd, UINT ReceivedMsg, WPARAM wParam, LPARAM lPar
 	case WM_RBUTTONDOWN:
 		if (Hero)
 		{
-			dll::BAG<FRECT>ObstBag(vObstacles.size());
+			if (!stop_nature)
+			{
+				Hero->dir = dirs::stop;
+				stop_nature = true;
+				nature_dir = dirs::stop;
+				break;
+			}
+			else
+			{
+				dll::BAG<FRECT>ObstBag(vObstacles.size());
 
-			if (!vObstacles.empty())
-				for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
-			
-			Hero->move(LOWORD(lParam)* scale_x, HIWORD(lParam)* scale_y, (float)(speed), ObstBag);
+				stop_nature = false;
+
+				if (!vObstacles.empty())
+					for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
+
+				Hero->move(LOWORD(lParam) * scale_x, HIWORD(lParam) * scale_y, (float)(speed), ObstBag);
+			}
 		}
 		break;
 
@@ -1072,19 +1163,26 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 
 		// HERO ACTION ****************************
 
-		nature_dir = dirs::stop;
+		
 
 		if (Hero)
 		{
-
 			if (Hero->end.y >= ground - 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::up_right;
 			else if (Hero->end.y >= ground - 100.0f && Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::up_left;
 			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_right;
 			else if (Hero->start.y <= sky + 100.0f && Hero->start.x <= 100.0f)nature_dir = dirs::down_left;
 			else if (Hero->end.y >= ground - 100.0f)nature_dir = dirs::up;
 			else if (Hero->start.y <= sky + 100.0f)nature_dir = dirs::down;
-			else if (Hero->start.x <= 100.0f)nature_dir = dirs::right;
-			else if (Hero->end.x >= scr_width - 100.0f)nature_dir = dirs::left;
+			else if (Hero->start.x <= 100.0f)
+			{
+				if (Hero->center.y >= scr_height / 2.0f)nature_dir = dirs::up_right;
+				else nature_dir = dirs::down_right;
+			}
+			else if (Hero->end.x >= scr_width - 100.0f)
+			{
+				if (Hero->center.y >= scr_height / 2.0f)nature_dir = dirs::up_left;
+				else nature_dir = dirs::down_left;
+			}
 		}
 
 		if (Hero)
@@ -1097,16 +1195,15 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance
 					for (int i = 0; i < vObstacles.size(); ++i)ObstBag.push_back(vObstacles[i]->my_rect);
 
 				Hero->move(Hero->get_target_x(), Hero->get_target_y(), (float)(speed), ObstBag);
-				
+
 				if (nature_dir == dirs::right || nature_dir == dirs::down_right)
 					Hero->dir = dirs::up_left;
 				else if (nature_dir == dirs::up_right)Hero->dir = dirs::down_left;
-				
 			}
 		}
 		
 		bool ocean_moving = false;
-		if (Field && nature_dir != dirs::stop)
+		if (Field && nature_dir != dirs::stop && !stop_nature)
 			ocean_moving = Field->move_ocean(nature_dir, (float)(speed));
 			
 		if (!vObstacles.empty() && nature_dir != dirs::stop && ocean_moving)
